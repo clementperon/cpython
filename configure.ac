@@ -579,7 +579,6 @@ AC_ARG_ENABLE([framework],
 	case $enableval in
 	no)
 		case $ac_sys_system in
-			iOS) AC_MSG_ERROR([iOS builds must use --enable-framework]) ;;
 			*)
 				PYTHONFRAMEWORK=
 				PYTHONFRAMEWORKDIR=no-framework
@@ -689,7 +688,6 @@ AC_ARG_ENABLE([framework],
 		esac
 	],[
 	case $ac_sys_system in
-		iOS) AC_MSG_ERROR([iOS builds must use --enable-framework]) ;;
 		*)
 			PYTHONFRAMEWORK=
 			PYTHONFRAMEWORKDIR=no-framework
@@ -1688,6 +1686,10 @@ else # shared is disabled
   esac
 fi
 AC_MSG_RESULT([$LDLIBRARY])
+
+if test "$ac_sys_system" = "iOS" && test "$PY_ENABLE_SHARED" = 1 && test -z "$PYTHONFRAMEWORK"; then
+  AC_MSG_ERROR([iOS builds must use --enable-framework; --enable-shared cannot be used without a framework, as an iOS app can only load a signed framework])
+fi
 
 # HOSTRUNNER - Program to run CPython for the host platform
 AC_MSG_CHECKING([HOSTRUNNER])
@@ -3830,7 +3832,11 @@ then
 			fi
 			LINKFORSHARED="$LINKFORSHARED"
 		elif test $ac_sys_system = "iOS"; then
-			LINKFORSHARED="-Wl,-stack_size,$stack_size $LINKFORSHARED "'$(PYTHONFRAMEWORKDIR)/$(PYTHONFRAMEWORK)'
+			LINKFORSHARED="-Wl,-stack_size,$stack_size $LINKFORSHARED"
+
+			if test "$enable_framework"; then
+				LINKFORSHARED="$LINKFORSHARED "'$(PYTHONFRAMEWORKDIR)/$(PYTHONFRAMEWORK)'
+			fi
 		fi
 		;;
 	OpenUNIX*|UnixWare*) LINKFORSHARED="-Wl,-Bexport";;
@@ -6755,8 +6761,9 @@ if test "$PY_ENABLE_SHARED" = "1" && ( test -n "$ANDROID_API_LEVEL" || test "$MA
   LIBPYTHON="-lpython${VERSION}${ABIFLAGS}"
 fi
 
-# On iOS the shared libraries must be linked with the Python framework
-if test "$ac_sys_system" = "iOS"; then
+# On iOS the shared libraries must be linked with the Python framework, when one
+# is being built
+if test "$ac_sys_system" = "iOS" && test "$enable_framework"; then
   MODULE_DEPS_SHARED="$MODULE_DEPS_SHARED \$(PYTHONFRAMEWORKDIR)/\$(PYTHONFRAMEWORK)"
 fi
 
@@ -8383,6 +8390,19 @@ AS_CASE([$host_cpu],
   [MODULE_BUILDTYPE=${MODULE_BUILDTYPE:-shared}]
 )
 AC_SUBST([MODULE_BUILDTYPE])
+
+dnl A non-framework iOS build is statically linked into the app binary. It has
+dnl no framework for extension modules to link against, and cannot load them at
+dnl runtime, so every extension module must be linked into libpython, and the
+dnl test modules that must be built as shared libraries cannot be built at all
+dnl (see Modules/Setup.stdlib.in). Both restrictions must be opted into
+dnl explicitly.
+AS_IF([test "$ac_sys_system" = "iOS" && test -z "$PYTHONFRAMEWORK"], [
+  AS_IF([test "$MODULE_BUILDTYPE" != "static"],
+    [AC_MSG_ERROR([iOS builds must use --enable-framework; a non-framework build cannot build shared extension modules, and requires MODULE_BUILDTYPE=static])])
+  AS_IF([test "$TEST_MODULES" != "no"],
+    [AC_MSG_ERROR([iOS builds must use --enable-framework; a non-framework build cannot build the shared test modules, and requires --disable-test-modules])])
+])
 
 dnl _MODULE_BLOCK_ADD([VAR], [VALUE])
 dnl internal: adds $1=quote($2) to MODULE_BLOCK

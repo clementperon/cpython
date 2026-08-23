@@ -1338,6 +1338,21 @@ See :source:`Platforms/Apple/iOS/README.md`.
    Create a Python.framework. Unlike macOS, the *INSTALLDIR* argument
    specifying the installation path is mandatory.
 
+.. option:: --disable-framework
+
+   Build a static ``libpython`` for embedding directly in an app binary,
+   instead of a ``Python.framework``. This is also the effect of providing no
+   framework option at all.
+
+   A static build cannot load extension modules at runtime, and so does not
+   support binary wheels. The restrictions that follow from this must be opted
+   into explicitly: a non-framework iOS build requires
+   ``MODULE_BUILDTYPE=static`` and :option:`--disable-test-modules`, and
+   rejects :option:`--enable-shared`. See
+   :source:`Platforms/Apple/iOS/README.md` for the full list of limitations.
+
+   .. versionadded:: 3.16
+
 .. option:: --with-framework-name=FRAMEWORK
 
    Specify the name for the framework (default: ``Python``).
